@@ -110,6 +110,3 @@ run_stage3_inpaint.py: 繪圖核心。
 有 LoRA：強度 0.75 (風格模式)。
 一般：強度 0.99 (重繪模式)。
 
-
-
-去 https://civitai.com/ 找模型下載後放在lora資料夾 並去lora_library加入資訊
