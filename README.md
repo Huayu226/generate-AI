@@ -49,6 +49,7 @@ pip install -r requirements.txt
 OPENAI_API_KEY=sk-proj-你的OpenAI金鑰...
 模型準備 (Model Setup)
 請確保你的 C:\generate AI\models\ 資料夾結構如下，缺一不可：
+```text
 C:\generate AI\models\
 │
 ├── loras\  (存放風格模型)
@@ -62,12 +63,14 @@ C:\generate AI\models\
         ├── config.json
         ├── model.safetensors
         └── preprocessor_config.json
+```
 下載連結參考：
 IP-Adapter: HuggingFace h94/IP-Adapter (下載 ip-adapter_sdxl.bin 及 image_encoder 資料夾內所有檔案)
 LoRA: Civitai (下載 SDXL 專用 LoRA)
 ⚙️ 設定檔 (Configuration)
 lora_library.json
 請在此檔案定義你的 LoRA 模型與觸發詞。Key 必須是純英文，以便 AI 選擇。
+```text
 JSON
 {
     "None": { "filename": null, "trigger": "" },
@@ -80,6 +83,7 @@ JSON
         "trigger": "blindbox, chibi, 3d render, cute"
     }
 }
+```
 使用方法 (Usage)
 
 執行主程式：
