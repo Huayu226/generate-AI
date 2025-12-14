@@ -133,6 +133,7 @@ JSON
         "trigger": "blindbox, chibi, 3d render, cute"
     }
 }
+```
 使用方法 (Usage)
 方式一：啟動 Web UI (推薦)
 這是最直覺的使用方式，擁有完整的操作介面。
