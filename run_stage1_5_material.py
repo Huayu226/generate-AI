@@ -4,7 +4,7 @@ import os
 from diffusers import StableDiffusionXLPipeline
 
 DECISION_FILE = "brain_decision.json"
-MATERIAL_OUTPUT = r"C:\generate AI\images\reference_material.png"
+MATERIAL_OUTPUT = "./images/reference_material.png"
 
 def main():
     # 1. 讀取大腦的決策

@@ -98,6 +98,17 @@ def main():
         content = response.choices[0].message.content
         decision_data = json.loads(content)
 
+        # 如果 MANUAL_LORA_KEY 有指定，就覆蓋大腦的選擇
+        manual_lora = os.environ.get("MANUAL_LORA_KEY")
+        if manual_lora:
+            if manual_lora in lora_library:
+                print(f"🔧 偵測到 MANUAL_LORA_KEY={manual_lora}，覆蓋大腦的 LoRA 選擇")
+                decision_data["lora_key"] = manual_lora
+                # 保留原本的權重或給預設 0.8
+                decision_data["lora_weight"] = float(decision_data.get("lora_weight", 0.8))
+            else:
+                print(f"⚠️ MANUAL_LORA_KEY={manual_lora} 不在 lora_library 中，改用大腦自動判斷")
+                
         # 提取 LoRA 資訊
         lora_key = decision_data.get("lora_key", "None")
         lora_weight = decision_data.get("lora_weight", 0.8)

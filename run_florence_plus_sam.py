@@ -21,47 +21,56 @@ DECISION_FILE = "brain_decision.json"
 
 if MODE == "material":
     # [素材模式]
-    IMAGE_PATH = r"C:\generate AI\images\reference_material.png"  # 來源是剛剛生成的素材
-    OUTPUT_BOX_IMAGE_PATH = r"C:\generate AI\images\material_box_viz.png"
-    OUTPUT_MASK_IMAGE_PATH = r"C:\generate AI\images\material_mask.png" # 素材的遮罩
-    OUTPUT_MASK_VIZ_PATH = r"C:\generate AI\images\material_mask_visualization.png"
-    OUTPUT_CUTOUT_PATH = r"C:\generate AI\images\reference_material_cutout.png" # [重點] 切割後的成品
+    IMAGE_PATH = r"./images/reference_material.png"  # 來源是剛剛生成的素材
+    OUTPUT_BOX_IMAGE_PATH = r"./images/material_box_viz.png"
+    OUTPUT_MASK_IMAGE_PATH = r"./images/material_mask.png" # 素材的遮罩"
+    OUTPUT_MASK_VIZ_PATH = r"./images/material_mask_visualization.png"
+    OUTPUT_CUTOUT_PATH = r"./images/reference_material_cutout.png" # [重點] 切割後的成品
 else:
     # [主圖模式] (預設)
-    IMAGE_PATH = r"C:\generate AI\images\a.png"
-    OUTPUT_BOX_IMAGE_PATH = r"C:\generate AI\images\stage1_found_box.png"
-    OUTPUT_MASK_IMAGE_PATH = r"C:\generate AI\images\stage2_generated_mask.png"
-    OUTPUT_MASK_VIZ_PATH = r"C:\generate AI\images\stage2_mask_visualization.png"
+    IMAGE_PATH = r"./images/a.png"
+    OUTPUT_BOX_IMAGE_PATH = r"./images/stage1_found_box.png"
+    OUTPUT_MASK_IMAGE_PATH = r"./images/stage2_generated_mask.png"
+    OUTPUT_MASK_VIZ_PATH = r"./images/stage2_mask_visualization.png"
 
 # --- 函數：讀取大腦決策 ---
 def get_prompt_from_json():
+    """
+    從 brain_decision.json 讀取要偵測的文字
+    優先順序：
+      1. detect_prompt
+      2. detect_target
+      3. 預設 "object"
+    """
     default = "object"
-    if not os.path.exists(DECISION_FILE): return default
+    if not os.path.exists(DECISION_FILE):
+        print(f"[警告] 找不到 {DECISION_FILE}，改用預設文字: {default}")
+        return default
+
     try:
         with open(DECISION_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
-            if MODE == "material":
-                # 如果是切素材，我們要找的是素材關鍵字 (例如 "Iron Man Helmet")
-                return data.get("material_keyword", "object")
-            else:
-                # 如果是切原圖，找原本的目標 (例如 "head")
-                return data.get("detect_prompt", "head")
-    except: return default
 
-TEXT_PROMPT = get_prompt_from_json()
+        text = data.get("detect_prompt") or data.get("detect_target") or default
+        print(f"[debug] 從 {DECISION_FILE} 讀到偵測目標: {text}")
+        return text
+    except Exception as e:
+        print(f"[警告] 讀取 {DECISION_FILE} 失敗: {e}，改用預設文字: {default}")
+        return default
 
-if MODE == "main" and TEXT_PROMPT == "WHOLE_IMAGE":
-    print("[特殊任務] 全圖修改模式，生成全白遮罩並跳過偵測。")
+
+# --- 2. 載入圖片 ---
+if not os.path.exists(IMAGE_PATH):
+    print(f"!!! 錯誤: 找不到圖片 {IMAGE_PATH}")
+    exit()
+
+image_pil = Image.open(IMAGE_PATH).convert("RGB")
+
+# 對素材模式做一個安全檢查 (避免素材生成掛了卻沒圖)
+if MODE == "material":
     try:
-        # 讀取原圖以獲取尺寸
-        original_image = Image.open(IMAGE_PATH)
-        width, height = original_image.size
-        # 創建全白圖片 (255 代表全部重繪)
-        white_mask = Image.new("L", (width, height), 255)
-        white_mask.save(OUTPUT_MASK_IMAGE_PATH)
-        print(f"  - 成功建立全白遮罩: {OUTPUT_MASK_IMAGE_PATH}")
-        # 直接結束程式，不執行後面的模型載入
-        exit()
+        # 嘗試建立一張同尺寸的全白遮罩 (如果後面流程真的掛，至少不會崩潰)
+        test_mask = Image.new("L", image_pil.size, 255)
     except Exception as e:
         print(f"!! 建立全白遮罩失敗: {e}")
         exit()
@@ -79,35 +88,43 @@ print("\n[階段 1] 正在載入 Florence-2-Large (Finder)...")
 # 這樣我們就可以放心地用 trust_remote_code=True，享受官方語法的便利
 florence_model_id = "multimodalart/Florence-2-large-no-flash-attn"
 
-florence_model = AutoModelForCausalLM.from_pretrained(
-    florence_model_id, 
-    torch_dtype=torch_dtype, 
-    trust_remote_code=True
-).to(device).eval()
-
 florence_processor = AutoProcessor.from_pretrained(
     florence_model_id, 
     trust_remote_code=True
 )
 
-# [階段 2] 載入 SAM (Hand)
+florence_model = AutoModelForCausalLM.from_pretrained(
+    florence_model_id,
+    torch_dtype=torch_dtype,
+    trust_remote_code=True
+).to(device)
+
+# [階段 2] 載入 SAM
 print("\n[階段 2] 正在載入 SAM (Hand)...")
-sam_model = SamModel.from_pretrained("facebook/sam-vit-base").to(device)
-sam_processor = SamProcessor.from_pretrained("facebook/sam-vit-base")
+# 使用穩定的 SAM base 模型
+sam_model_id = "facebook/sam-vit-base"
 
-print(f"  - 所有模型載入完畢 (耗時: {time.time() - start_time:.2f} 秒)")
-
-# --- 3. 載入圖片 ---
+SAM_AVAILABLE = True
 try:
-    image_pil = Image.open(IMAGE_PATH).convert("RGB")
-    image_cv = cv2.imread(IMAGE_PATH) 
-    if image_cv is None: raise FileNotFoundError
-except:
-    print(f"!! 錯誤: 找不到圖片 {IMAGE_PATH}")
-    exit()
+    sam_processor = SamProcessor.from_pretrained(sam_model_id)
+    # ⭐ SAM 一律用 float32，避免 input(float32) vs bias(half) 不合
+    sam_model = SamModel.from_pretrained(
+        sam_model_id,
+        torch_dtype=torch.float32
+    ).to(device)
+    print("  - SAM 載入成功")
+except Exception as e:
+    SAM_AVAILABLE = False
+    sam_processor = None
+    sam_model = None
+    print(f"  - SAM 載入失敗，將僅使用邊界框遮罩模式。錯誤: {e}")
 
-# 執行階段一：Florence-2 (Finder)
-print(f"\n[執行階段 1] Florence-2 正在尋找: '{TEXT_PROMPT}'...")
+# ==============================================================================
+# 執行階段一：Florence-2 尋找目標 (Phrase Grounding)
+# ==============================================================================
+# 從大腦決策檔案讀取要找什麼
+TEXT_PROMPT = get_prompt_from_json()
+print(f"[執行階段 1] Florence-2 正在尋找: '{TEXT_PROMPT}'...")
 
 # 設定任務: Phrase Grounding
 task_prompt = "<CAPTION_TO_PHRASE_GROUNDING>"
@@ -150,13 +167,18 @@ if len(boxes) == 0:
     exit()
 
 # 取第一個框
-best_box = boxes[0] 
-print(f"  - 階段 1 成功: 找到了 '{labels[0]}'")
+best_box = boxes[0]
+x1, y1, x2, y2 = best_box
 
-# 視覺化
-x1, y1, x2, y2 = [int(i) for i in best_box]
-cv2.rectangle(image_cv, (x1, y1), (x2, y2), (0, 255, 0), 2)
-cv2.imwrite(OUTPUT_BOX_IMAGE_PATH, image_cv)
+print(f"  - 階段 1 成功: 找到了 '{TEXT_PROMPT}'")
+print(f"    Box: {best_box}, Label: {labels[0] if labels else 'N/A'}")
+
+# 畫出框框存成圖片
+box_viz = image_pil.copy()
+draw = ImageDraw.Draw(box_viz)
+draw.rectangle([x1, y1, x2, y2], outline="red", width=4)
+box_viz.save(OUTPUT_BOX_IMAGE_PATH)
+print(f"  - 偵測框視覺化已儲存: {OUTPUT_BOX_IMAGE_PATH}")
 
 # ==============================================================================
 # 執行階段二：SAM (Hand)
@@ -168,8 +190,9 @@ print("\n[階段 2] 正在生成遮罩...")
 
 BOX_KEYWORDS = ["head", "face", "body"]
 
-# 如果目前的搜尋目標 (TEXT_PROMPT) 在清單裡，就開啟強制模式
-if TEXT_PROMPT in BOX_KEYWORDS:
+# 如果目前的搜尋目標 (TEXT_PROMPT) 文字裡包含關鍵字，就開啟強制模式
+text_lower = TEXT_PROMPT.lower()
+if any(k in text_lower for k in BOX_KEYWORDS):
     USE_BOX_AS_MASK = True
     print(f"偵測到目標 '{TEXT_PROMPT}' 適合使用邊界框模式。")
 else:
@@ -206,7 +229,30 @@ else:
     # 選最大的
     mask_areas = [torch.sum(m).item() for m in masks_tensor]
     best_mask_idx = mask_areas.index(max(mask_areas))
-    mask_numpy = masks_tensor[best_mask_idx].cpu().numpy().squeeze()
+    mask_numpy = masks_tensor[best_mask_idx].cpu().numpy()
+
+    # ⭐ 保證最後是 2 維 (H, W)，避免 Pillow 出現 "Too many dimensions" 錯誤
+    if mask_numpy.ndim == 3:
+        # 常見幾種情況都處理一下
+        if mask_numpy.shape[0] == 1:
+            # (1, H, W) -> (H, W)
+            mask_numpy = mask_numpy[0]
+        elif mask_numpy.shape[-1] == 1:
+            # (H, W, 1) -> (H, W)
+            mask_numpy = mask_numpy[..., 0]
+        else:
+            # 例如 (C, H, W) 或 (H, W, C)，直接拿第一個 channel 當遮罩
+            if mask_numpy.shape[0] <= mask_numpy.shape[-1]:
+                mask_numpy = mask_numpy[0]
+            else:
+                mask_numpy = mask_numpy[..., 0]
+    elif mask_numpy.ndim > 3:
+        # 萬一維度更高，先把 size=1 的維度壓掉
+        mask_numpy = np.squeeze(mask_numpy)
+
+    if mask_numpy.ndim != 2:
+        raise RuntimeError(f"Unexpected SAM mask shape: {mask_numpy.shape}")
+
     mask_image = Image.fromarray((mask_numpy * 255).astype(np.uint8), mode="L")
 
 # 儲存遮罩
