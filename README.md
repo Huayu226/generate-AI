@@ -154,7 +154,6 @@ Tab 3: 圖片嵌字 - 上傳圖片，輸入想要生成的梗圖文字，自動�
 
 ```text
 python run.py
-```text
 系統會提示你輸入指令，並依序執行各階段腳本。
 
 檔案說明 (File Description)
