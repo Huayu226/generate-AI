@@ -6,7 +6,7 @@ from datetime import datetime
 import base64
 import io
 import json  # 👈 新增
-
+import sys
 import gradio as gr
 from PIL import Image
 from openai import OpenAI
@@ -135,7 +135,7 @@ def run_pipeline(
     else:
         env.pop("MANUAL_LORA_KEY", None)
 
-    cmd = ["python", RUN_PY_PATH]
+    cmd = [sys.executable, RUN_PY_PATH]
 
     if not os.path.exists(RUN_PY_PATH):
         return (

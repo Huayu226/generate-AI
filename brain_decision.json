@@ -2,7 +2,7 @@
     "detect_prompt": "head",
     "lora_key": "None",
     "lora_weight": 0.8,
-    "final_prompt": "a realistic catfish head, slimy skin, whiskers, no hair, bald, animal head, replacing the human head",
-    "needs_material": false,
-    "material_keyword": ""
+    "final_prompt": "A realistic Iron Man helmet replacing the human head, detailed metal texture, no hair, bald, mechanical features",
+    "needs_material": true,
+    "material_keyword": "Iron Man Helmet"
 }
