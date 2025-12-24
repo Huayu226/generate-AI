@@ -2,6 +2,9 @@ Smart AI Image Editing Agent (智慧多模態修圖代理人)
 這是一個基於 多模態代理 (Multimodal AI Agent) 架構的自動化圖像編輯系統，現在更加入了 Gradio Web UI 視覺化介面。
 
 它不僅僅是文生圖，更是一個具備「視覺理解」、「決策能力」與「排版能力」的 AI 系統。它能聽懂你的中文指令，自動判斷是否需要尋找素材、偵測修圖區域，甚至幫你製作帶有文字的梗圖。
+這是一個基於 多模態代理 (Multimodal AI Agent) 架構的自動化圖像編輯系統，現在更加入了 Gradio Web UI 視覺化介面。
+
+它不僅僅是文生圖，更是一個具備「視覺理解」、「決策能力」與「排版能力」的 AI 系統。它能聽懂你的中文指令，自動判斷是否需要尋找素材、偵測修圖區域，甚至幫你製作帶有文字的梗圖。
 
 核心特色 (Key Features)
 直覺式 Web UI 操作 (New!)
@@ -51,32 +54,21 @@ graph TD
     Check -- No --> Detect[階段 1 & 2: 偵測與遮罩 (Florence-2 + SAM)]
     Detect -->|生成 mask| Artist
     
-    Artist[階段 3: 藝術家 (Fooocus Inpaint + IP-Adapter)]
-    Artist -->|合成與重繪| Result[最終成品]
-    Result -->|顯示| GradioUI
+    Artist[階段 3: 藝術家 (SDXL Inpainting)]
+    Artist -->|IP-Adapter / LoRA| Result[最終成品]
 安裝指南 (Installation)
 本專案依賴多個 AI 模型，請依照以下步驟建立環境。
 
 1. 建立虛擬環境
 建議使用 Anaconda：
-
-Bash
-
 conda create -n agent_env python=3.10
 conda activate agent_env
+```
 2. 安裝 PyTorch (GPU 版)
 請依照你的 CUDA 版本調整，推薦指令：
-
-Bash
-
 conda install pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia
-3. 安裝專案依賴
-Bash
-
-# 確保包含 gradio, openai, diffusers, transformers, opencv-python, pillow 等
+3. 安裝黃金組合依賴 (關鍵步驟)
 pip install -r requirements.txt
-(如果尚未建立 requirements.txt，請參考專案中的 import 手動安裝)
-
 4. 設定 API Key
 在專案根目錄建立 .env 檔案，填入 OpenAI 金鑰：
 
@@ -84,42 +76,29 @@ Ini, TOML
 
 OPENAI_API_KEY=sk-proj-你的OpenAI金鑰...
 模型準備 (Model Setup)
-請確保你的資料夾結構如下，缺一不可：
-
-Plaintext
-
-C:\generate AI\
+請確保你的 C:\generate AI\models\ 資料夾結構如下，缺一不可：
+```text
+C:\generate AI\models\
 │
-├── models\
-│   ├── loras\                      # (存放風格 LoRA)
-│   │   ├── minecraft.safetensors
-│   │   ├── cute_blindbox_sdxl.safetensors
-│   │   └── ...
-│   │
-│   ├── ip_adapter\                 # (IP-Adapter 模型)
-│   │   ├── ip-adapter_sdxl.bin     # 下載自 h94/IP-Adapter
-│   │   └── image_encoder\          # 下載自 h94/IP-Adapter
-│   │       ├── config.json
-│   │       └── model.safetensors
-│   │
-│   └── juggernatuXL_v8_diffusers\  # (主繪圖模型 Checkpoint)
-│       └── juggernautXL_v8Rundiffusion.safetensors
+├── loras\  (存放風格模型)
+│   ├── minecraft.safetensors
+│   ├── cute_blindbox_sdxl.safetensors
+│   └── sdxl_cyberpunk.safetensors
 │
-├── images\                         # (自動生成的圖片暫存區)
-├── app_gradio.py                   # (啟動程式)
-└── ... (其他 python 腳本)
-模型下載來源推薦：
-
-Checkpoint: Juggernaut XL (Civitai) (或其他 SDXL Inpaint 模型)
-
-IP-Adapter: HuggingFace h94/IP-Adapter (下載 sdxl_models/ip-adapter_sdxl.bin 以及 sdxl_models/image_encoder/)
-
-LoRA: Civitai (請找 SDXL 專用 LoRA)
-
-設定檔 (Configuration)
+└── ip_adapter\  (存放 IP-Adapter 模型)
+    ├── ip-adapter_sdxl.bin       <-- (注意：是標準版，對應 image_encoder 的 1280 維度)
+    └── image_encoder\
+        ├── config.json
+        ├── model.safetensors
+        └── preprocessor_config.json
+```
+下載連結參考：
+IP-Adapter: HuggingFace h94/IP-Adapter (下載 ip-adapter_sdxl.bin 及 image_encoder 資料夾內所有檔案)
+LoRA: Civitai (下載 SDXL 專用 LoRA)
+⚙️ 設定檔 (Configuration)
 lora_library.json
-請在此檔案定義你的 LoRA 模型與觸發詞。這讓 AI 大腦知道有哪些風格可用。
-
+請在此檔案定義你的 LoRA 模型與觸發詞。Key 必須是純英文，以便 AI 選擇。
+```text
 JSON
 
 {
@@ -135,39 +114,28 @@ JSON
 }
 ```
 使用方法 (Usage)
-方式一：啟動 Web UI (推薦)
-這是最直覺的使用方式，擁有完整的操作介面。
 
-Bash
-
-python app_gradio.py
-執行後，請在瀏覽器打開終端機顯示的網址 (通常是 http://127.0.0.1:7860)。
-
-Tab 1: 文字轉圖片 - 快速生成素材或底圖。
-
-Tab 2: 圖片轉圖片 - 上傳圖片，輸入中文指令（如「幫他戴上墨鏡」），選擇 LoRA 風格。
-
-Tab 3: 圖片嵌字 - 上傳圖片，輸入想要生成的梗圖文字，自動排版合成。
-
-方式二：命令行模式 (進階除錯用)
-如果你想單獨測試後端流程，可以直接執行主程式：
-
-Bash
-
+執行主程式：
+更改輸入圖片的路徑後在terminal執行
 python run.py
-系統會提示你輸入指令，並依序執行各階段腳本。
+依照提示輸入指令：
+換裝/換頭："幫他戴上鋼鐵人頭盔" (觸發素材獵人 + IP-Adapter + 合成重繪)
+改畫風："把這張圖變成麥塊風格" (觸發 LoRA)
+一般修圖："把頭髮變成紅色" (觸發一般 Inpaint)
 
-檔案說明 (File Description)
-app_gradio.py: [入口] Gradio Web 介面主程式，負責處理 UI 邏輯並呼叫後端。
+檔案說明
+run.py: 總指揮，負責串接所有階段。
+run_stage0_llm.py: 大腦。負責解析意圖、選擇 LoRA、撰寫 Prompt，並決定是否需要素材。
+run_stage1_5_material.py: 素材獵人。生成去背的參考素材 (如鋼鐵人頭盔)。
+run_florence_plus_sam.py: 偵測與遮罩。
+使用 microsoft/Florence-2-large 找座標。
+針對 "head/face" 啟用 Box-to-Mask 強制矩形遮罩，確保完整覆蓋。
+針對一般物體使用 SAM 進行精細切割。
+run_stage3_inpaint.py: 繪圖核心。
+具備 smart_fit_reference (幾何適配) 與 composite_reference (硬合成) 功能。
 
-run.py: [總指揮] 負責串接所有階段的 Pipeline。
+自動判斷模式：
+有素材：強度 0.65 (融合模式)。
+有 LoRA：強度 0.75 (風格模式)。
+一般：強度 0.99 (重繪模式)。
 
-run_stage0_llm.py: [大腦] 呼叫 GPT-4o 解析意圖、選擇 LoRA、撰寫 Prompt，並決定是否需要素材。
-
-run_stage1_5_material.py: [獵人] 若大腦決定需要素材，此腳本負責生成去背的參考圖 (如頭盔、特定道具)。
-
-run_florence_plus_sam.py: [眼睛] 負責偵測目標物體並生成遮罩 (Mask)。
-
-run_stage3_inpaint.py: [畫家] 使用 Fooocus SDXL + IP-Adapter 進行最終的局部重繪。
-
-insert_word.py: [排版] 負責處理圖片上的文字排版與繪製。
